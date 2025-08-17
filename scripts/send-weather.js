@@ -5,8 +5,9 @@ global.fetch = nf;
 global.Request = nf.Request;
 global.Response = nf.Response;
 
+const admin = require('firebase-admin');
+
 const sgMail = require("@sendgrid/mail");
-const crypto = require("crypto");
 
 const PROJECT_ID = process.env.FIREBASE_PROJECT_ID;
 const SA_JSON = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
@@ -20,90 +21,32 @@ if (!PROJECT_ID || !SA_JSON || !SG_KEY || !WEATHER_KEY) {
   process.exit(1);
 }
 
+admin.initializeApp({
+  credential: admin.credential.cert(JSON.parse(SA_JSON)),
+  projectId: PROJECT_ID,
+});
+const db = admin.firestore();
+
 sgMail.setApiKey(SG_KEY);
 
 // Helpers using fetch (polyfilled above via node-fetch for Node runners / GitHub Actions)
-async function getAccessTokenFromSA(saJson, scope) {
-  const sa = JSON.parse(saJson);
-  const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const now = Math.floor(Date.now() / 1000);
-  const claim = base64url(JSON.stringify({
-    iss: sa.client_email,
-    sub: sa.client_email,
-    aud: "https://oauth2.googleapis.com/token",
-    iat: now,
-    exp: now + 3600,
-    scope
-  }));
-  const toSign = `${header}.${claim}`;
-  const signature = signRS256(toSign, sa.private_key);
-  const assertion = `${toSign}.${signature}`;
 
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion
-    })
-  });
-  if (!res.ok) throw new Error(`Token error ${res.status}: ${await res.text()}`);
-  const j = await res.json();
-  return j.access_token;
-}
+async function getActiveSubscribers() {
+  const snap = await db.collection('subscribers')
+    .where('confirmed', '==', true)
+    .where('unsubscribed', '==', false)
+    .get();
 
-function base64url(b64str) {
-  return Buffer.from(b64str).toString("base64")
-    .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-}
-function signRS256(data, privKey) {
-  const sign = crypto.createSign("RSA-SHA256");
-  sign.update(data);
-  sign.end();
-  return sign.sign(privKey, "base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-}
-
-async function runQuery(accessToken, body) {
-  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`;
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${accessToken}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
-  if (!r.ok) throw new Error(`runQuery ${r.status}: ${await r.text()}`);
-  return r.json();
-}
-
-async function getActiveSubscribers(accessToken) {
-  const q = {
-    structuredQuery: {
-      from: [{ collectionId: "subscribers" }],
-      where: {
-        compositeFilter: {
-          op: "AND",
-          filters: [
-            { fieldFilter: { field: { fieldPath: "confirmed" }, op: "EQUAL", value: { booleanValue: true } } },
-            { fieldFilter: { field: { fieldPath: "unsubscribed" }, op: "EQUAL", value: { booleanValue: false } } }
-          ]
-        }
-      }
-    }
-  };
-  const rows = await runQuery(accessToken, q);
   const byCity = {};
-  for (const r of rows) {
-    const doc = r.document;
-    if (!doc || !doc.fields) continue;
-    const email = (doc.fields.email && doc.fields.email.stringValue) || "";
-    const city = (doc.fields.city && doc.fields.city.stringValue) || "";
-    if (!email || !city) continue;
+  snap.forEach(doc => {
+    const d = doc.data();
+    if (!d || !d.email || !d.city) return;
+    const email = String(d.email).toLowerCase();
+    const city = String(d.city);
     if (!byCity[city]) byCity[city] = new Set();
-    byCity[city].add(email.toLowerCase());
-  }
-  // convert Set -> array
+    byCity[city].add(email);
+  });
+
   const out = {};
   for (const [city, set] of Object.entries(byCity)) out[city] = Array.from(set);
   return out;
@@ -155,8 +98,7 @@ function chunk(arr, size) {
 
 (async () => {
   try {
-    const token = await getAccessTokenFromSA(SA_JSON, "https://www.googleapis.com/auth/datastore");
-    const byCity = await getActiveSubscribers(token);
+    const byCity = await getActiveSubscribers();
     if (Object.keys(byCity).length === 0) {
       console.log("No active subscribers");
       return;
