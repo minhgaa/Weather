@@ -1,0 +1,54 @@
+name: send-test
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "Recipient email"
+        required: true
+      city:
+        description: "City"
+        required: false
+        default: "Hanoi"
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - run: npm init -y && npm i @sendgrid/mail node-fetch@2
+      - name: Send test email
+        env:
+          SENDGRID_KEY: ${{ secrets.SENDGRID_KEY }}
+          WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
+        run: |
+          node - <<'NODE'
+          const sgMail = require("@sendgrid/mail");
+          const fetch = require("node-fetch");
+          const email = process.env.INPUT_EMAIL;
+          const city  = process.env.INPUT_CITY || "Hanoi";
+          if (!process.env.SENDGRID_KEY || !process.env.WEATHER_API_KEY) {
+            throw new Error("Missing SENDGRID_KEY or WEATHER_API_KEY secret");
+          }
+          sgMail.setApiKey(process.env.SENDGRID_KEY);
+          (async () => {
+            const url = new URL("https://api.weatherapi.com/v1/forecast.json");
+            url.searchParams.set("key", process.env.WEATHER_API_KEY);
+            url.searchParams.set("q", city);
+            url.searchParams.set("days", "1");
+            url.searchParams.set("aqi", "no");
+            url.searchParams.set("alerts", "no");
+            const r = await fetch(url.href);
+            if (!r.ok) throw new Error(await r.text());
+            const data = await r.json();
+            await sgMail.send({
+              to: email,
+              from: { email: "no-reply@yourdomain.com", name: "Weather Daily (Test)" },
+              subject: `Test Forecast — ${city}`,
+              html: `<pre>${JSON.stringify(data.current, null, 2)}</pre>`
+            });
+            console.log("Sent to", email);
+          })().catch(e => { console.error(e); process.exit(1); });
+          NODE
