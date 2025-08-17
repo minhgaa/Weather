@@ -1,18 +1,46 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="utf-8" />
   <title>Unsubscribe</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; color: #222; }
-    .card { max-width: 560px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; padding: 20px; box-shadow: 0 6px 24px rgba(0,0,0,.05); }
-    h1 { font-size: 20px; margin: 0 0 12px; }
-    #status { margin-top: 12px; color: #555; }
-    .ok { color: #1a7f37; }
-    .err { color: #c62828; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      padding: 24px;
+      color: #222;
+    }
+
+    .card {
+      max-width: 560px;
+      margin: 0 auto;
+      border: 1px solid #eee;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, .05);
+    }
+
+    h1 {
+      font-size: 20px;
+      margin: 0 0 12px;
+    }
+
+    #status {
+      margin-top: 12px;
+      color: #555;
+    }
+
+    .ok {
+      color: #1a7f37;
+    }
+
+    .err {
+      color: #c62828;
+    }
   </style>
 </head>
+
 <body>
   <div class="card">
     <h1>Unsubscribe</h1>
@@ -25,9 +53,12 @@
     import { getFirestore, collection, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
-      apiKey: "YOUR_WEB_API_KEY",
+      apiKey: "AIzaSyDIGMoObgso0mzHqm9P3i2i2BUuEJKHrQI",
       authDomain: "weatherapp-0101.firebaseapp.com",
       projectId: "weatherapp-0101",
+      storageBucket: "weatherapp-0101.firebasestorage.app",
+      messagingSenderId: "1085786149065",
+      appId: "1:1085786149065:web:037743a6e2cea018cf7d18"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -84,4 +115,5 @@
     run();
   </script>
 </body>
+
 </html>
