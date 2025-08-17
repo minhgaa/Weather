@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Unsubscribe</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; color: #222; }
+    .card { max-width: 560px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; padding: 20px; box-shadow: 0 6px 24px rgba(0,0,0,.05); }
+    h1 { font-size: 20px; margin: 0 0 12px; }
+    #status { margin-top: 12px; color: #555; }
+    .ok { color: #1a7f37; }
+    .err { color: #c62828; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Unsubscribe</h1>
+    <div id="status">Processing…</div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFirestore, collection, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "YOUR_WEB_API_KEY",
+      authDomain: "weatherapp-0101.firebaseapp.com",
+      projectId: "weatherapp-0101",
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const statusEl = document.getElementById("status");
+
+    function getParam(name) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(name);
+    }
+
+    async function run() {
+      try {
+        const tokenParam = getParam("token");
+        const emailParam = getParam("email");
+
+        if (!tokenParam && !emailParam) {
+          statusEl.className = "err";
+          statusEl.textContent = "Missing token or email.";
+          return;
+        }
+
+        await signInAnonymously(auth);
+
+        let q;
+        if (tokenParam) {
+          q = query(collection(db, "subscribers"), where("token", "==", tokenParam));
+        } else {
+          const email = String(emailParam).trim().toLowerCase();
+          q = query(collection(db, "subscribers"), where("email", "==", email));
+        }
+
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          statusEl.className = "err";
+          statusEl.textContent = "Not found or already unsubscribed.";
+          return;
+        }
+
+        const docRef = snap.docs[0].ref;
+        await updateDoc(docRef, { unsubscribed: true });
+
+        statusEl.className = "ok";
+        statusEl.textContent = "✅ You have been unsubscribed.";
+      } catch (e) {
+        console.error(e);
+        statusEl.className = "err";
+        statusEl.textContent = "Error: " + (e?.message || e);
+      }
+    }
+
+    run();
+  </script>
+</body>
+</html>
