@@ -18,11 +18,14 @@ import 'package:weather_app/cubit/forecast_cubit.dart';
 import 'package:sizer/sizer.dart';
 import 'package:weather_app/cubit/history_cubit.dart';
 import 'package:weather_app/feature/subscribe/presentation/widget/subscribe_panel.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
+  try {
+    await FirebaseAuth.instance.signInAnonymously();
+  } catch (_) {}
   final http = HttpClient();
   final locDs = LocationRemoteDS(http);
   final locRepo = LocationRepositoryImpl(locDs);

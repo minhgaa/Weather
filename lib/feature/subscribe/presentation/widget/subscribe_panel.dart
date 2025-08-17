@@ -31,7 +31,11 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
     final city = _city.text.trim();
     if (email.isEmpty || city.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter both email and city.')),
+        const SnackBar(
+          content: Text('Please enter both email and city.'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(top: 16, left: 16, right: 16),
+        ),
       );
       return;
     }
@@ -39,7 +43,11 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
     if (!emailOk) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Invalid email format.')));
+      ).showSnackBar(const SnackBar(
+        content: Text('Invalid email format.'),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(top: 16, left: 16, right: 16),
+      ));
       return;
     }
 
@@ -59,26 +67,26 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
             'createdAt': now,
           });
       if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Subscription Requested'),
-          content: const Text(
-            'We have recorded your request. Please check your inbox and click the Confirm button in the email to start receiving daily forecasts.',
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Subscription request recorded. Check your inbox and click Confirm to start receiving daily forecasts.',
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(top: 16, left: 16, right: 16),
+          duration: Duration(seconds: 5),
         ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to subscribe: $e')));
+      ).showSnackBar(SnackBar(
+        content: Text('Failed to subscribe: $e'),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.only(top: 16, left: 16, right: 16),
+      ));
     }
   }
 
@@ -88,6 +96,8 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter your email to unsubscribe.'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(top: 16, left: 16, right: 16),
         ),
       );
       return;
@@ -96,7 +106,11 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
     if (!emailOk) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Invalid email format.')));
+      ).showSnackBar(const SnackBar(
+        content: Text('Invalid email format.'),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(top: 16, left: 16, right: 16),
+      ));
       return;
     }
 
@@ -107,7 +121,11 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to open unsubscribe page: $e')),
+        SnackBar(
+          content: Text('Failed to open unsubscribe page: $e'),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.only(top: 16, left: 16, right: 16),
+        ),
       );
     }
   }
