@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
+import 'package:weather_app/core/theme/theme.dart';
 
 class SubscriptionPanel extends StatefulWidget {
-  final String? defaultCity;     // truyền city đang xem nếu có
-  final String? defaultCoords;   // ví dụ "21.03,105.85"
+  final String? defaultCity;
+  final String? defaultCoords;
   const SubscriptionPanel({super.key, this.defaultCity, this.defaultCoords});
 
   @override
@@ -17,6 +18,8 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
   final _email = TextEditingController();
   final _city = TextEditingController();
 
+  static const String _hostingBase = 'https://weatherapp-0101.web.app';
+
   @override
   void initState() {
     super.initState();
@@ -24,79 +27,88 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
   }
 
   Future<void> _subscribe() async {
-    final email = _email.text.trim();
+    final email = _email.text.trim().toLowerCase();
     final city = _city.text.trim();
-    if (email.isEmpty || city.isEmpty) return;
+    if (email.isEmpty || city.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter both email and city.')),
+      );
+      return;
+    }
+    final emailOk = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
+    if (!emailOk) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid email format.')));
+      return;
+    }
 
     final uuid = const Uuid();
     final token = uuid.v4();
     final now = FieldValue.serverTimestamp();
     try {
-      await FirebaseFirestore.instance.collection('subscribers').add({
-        'email': email,
-        'city': city,
-        'confirmed': false,
-        'unsubscribed': false,
-        'token': token,
-        'createdAt': now,
-      });
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Subscription Requested'),
-            content: const Text('Please check your email to confirm your subscription.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
+      await FirebaseFirestore.instance
+          .collection('subscribers')
+          .doc(token)
+          .set({
+            'email': email,
+            'city': city,
+            'confirmed': false,
+            'unsubscribed': false,
+            'token': token,
+            'createdAt': now,
+          });
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Subscription Requested'),
+          content: const Text(
+            'We have recorded your request. Please check your inbox and click the Confirm button in the email to start receiving daily forecasts.',
           ),
-        );
-      }
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to subscribe: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to subscribe: $e')));
     }
   }
 
   Future<void> _unsubscribe() async {
-    final email = _email.text.trim();
+    final email = _email.text.trim().toLowerCase();
     if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your email to unsubscribe.')),
+        const SnackBar(
+          content: Text('Please enter your email to unsubscribe.'),
+        ),
       );
       return;
     }
+    final emailOk = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
+    if (!emailOk) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid email format.')));
+      return;
+    }
+
+    final fullUrl =
+        '$_hostingBase/unsubscribe.html?email=${Uri.encodeComponent(email)}';
     try {
-      final query = await FirebaseFirestore.instance
-          .collection('subscribers')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-      if (query.docs.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No subscription found for this email.')),
-          );
-        }
-        return;
-      }
-      final token = query.docs.first.data()['token'];
-      final unsubUrl = '/unsubscribe.html?token=$token';
-      // Use the absolute URL for Firebase Hosting
-      final fullUrl = 'https://${Uri.base.host}$unsubUrl';
       await launchUrlString(fullUrl, mode: LaunchMode.externalApplication);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to unsubscribe: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to open unsubscribe page: $e')),
+      );
     }
   }
 
@@ -105,8 +117,6 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Daily Forecast Email', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
         TextField(
           controller: _email,
           decoration: const InputDecoration(
@@ -126,29 +136,29 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
           ),
         ),
         const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: TextButton(
-                onPressed: _subscribe,
-                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                child: const Text('Subscribe'),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _unsubscribe,
-                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                child: const Text('Unsubscribe'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
         const Text(
           'You will receive a confirmation email (double opt‑in). You can unsubscribe anytime.',
           style: TextStyle(fontSize: 12, color: Colors.black54),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Spacer(),
+            TextButton(
+              onPressed: _subscribe,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: 20,
+                ),
+                backgroundColor: AppTheme.primarySeed,
+              ),
+              child: const Text(
+                'Subscribe',
+                style: TextStyle(color: AppTheme.white),
+              ),
+            ),
+          ],
         ),
       ],
     );

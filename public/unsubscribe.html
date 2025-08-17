@@ -50,7 +50,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, collection, query, where, getDocs, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDIGMoObgso0mzHqm9P3i2i2BUuEJKHrQI",
@@ -85,14 +85,19 @@
 
         await signInAnonymously(auth);
 
-        let q;
+        // Fast-path: if token is provided and your app saved subscriber with docId = token,
+        // we can update directly without any read (safer with strict Firestore Rules).
         if (tokenParam) {
-          q = query(collection(db, "subscribers"), where("token", "==", tokenParam));
-        } else {
-          const email = String(emailParam).trim().toLowerCase();
-          q = query(collection(db, "subscribers"), where("email", "==", email));
+          const ref = doc(db, "subscribers", tokenParam);
+          await updateDoc(ref, { unsubscribed: true });
+          statusEl.className = "ok";
+          statusEl.textContent = "✅ You have been unsubscribed.";
+          return;
         }
 
+        // Fallback (email): requires read permission. Only used when token is not available.
+        const email = String(emailParam).trim().toLowerCase();
+        const q = query(collection(db, "subscribers"), where("email", "==", email));
         const snap = await getDocs(q);
         if (snap.empty) {
           statusEl.className = "err";
@@ -100,15 +105,15 @@
           return;
         }
 
-        const docRef = snap.docs[0].ref;
-        await updateDoc(docRef, { unsubscribed: true });
+        const ref = snap.docs[0].ref;
+        await updateDoc(ref, { unsubscribed: true });
 
         statusEl.className = "ok";
         statusEl.textContent = "✅ You have been unsubscribed.";
       } catch (e) {
         console.error(e);
         statusEl.className = "err";
-        statusEl.textContent = "Error: " + (e?.message || e);
+        statusEl.textContent = "Error: " + (e && e.message ? e.message : e);
       }
     }
 

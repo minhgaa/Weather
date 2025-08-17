@@ -1,18 +1,34 @@
 <!DOCTYPE html>
 <html>
-
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Confirm subscription</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; color: #222; }
+    .card { max-width: 560px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; padding: 20px; box-shadow: 0 6px 24px rgba(0,0,0,.05); }
+    h1 { font-size: 20px; margin: 0 0 12px; }
+    #status { margin-top: 12px; color: #555; white-space: pre-line; }
+    .ok { color: #1a7f37; }
+    .err { color: #c62828; }
+  </style>
 </head>
-
 <body>
-  <h2 id="status">Confirming...</h2>
+  <div class="card">
+    <h1>Confirm subscription</h1>
+    <div id="status">Processing…</div>
+  </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getFirestore, collection, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const statusEl = document.getElementById('status');
+    function setStatus(msg, cls) {
+      statusEl.className = cls || '';
+      statusEl.textContent = String(msg);
+    }
 
     const firebaseConfig = {
       apiKey: "AIzaSyDIGMoObgso0mzHqm9P3i2i2BUuEJKHrQI",
@@ -27,37 +43,39 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    function getParam(name) {
-      const params = new URLSearchParams(window.location.search);
-      return params.get(name);
-    }
+    function getParam(name) { return new URLSearchParams(location.search).get(name); }
 
-    async function run() {
-      const token = getParam("token");
-      const status = document.getElementById("status");
-      if (!token) {
-        status.textContent = "Missing token";
-        return;
+    (async () => {
+      try {
+        const token = getParam('token');
+        if (!token) { setStatus('Missing token', 'err'); return; }
+
+        // 1) Sign-in anonymously to satisfy Firestore Rules (request.auth != null)
+        try {
+          await signInAnonymously(auth);
+        } catch (e) {
+          console.error('Anonymous sign-in failed:', e);
+          setStatus('Auth error. Please enable Anonymous Auth in Firebase Console.', 'err');
+          return;
+        }
+
+        // 2) Update by known document id (token) — requires that the doc already exists
+        try {
+          await updateDoc(doc(db, 'subscribers', token), { confirmed: true });
+          setStatus('✅ Subscription confirmed!', 'ok');
+        } catch (e) {
+          console.error('Update failed:', e);
+          // Common causes:
+          // - Firestore Rules too strict (deny update)
+          // - Document with this token does not exist
+          // - Wrong project or missing authorized domain
+          setStatus(`Error updating subscription.\n• Ensure the document with this token exists.\n• Check Firestore Rules allow updating only the 'confirmed' field.\n• Make sure Anonymous Auth is enabled.\n\nDetails: ${e && e.message ? e.message : e}`, 'err');
+        }
+      } catch (e) {
+        console.error(e);
+        setStatus(`Unexpected error: ${e && e.message ? e.message : e}`, 'err');
       }
-
-      await signInAnonymously(auth);
-
-      const q = query(collection(db, "subscribers"), where("token", "==", token));
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        status.textContent = "Invalid token";
-        return;
-      }
-      const docRef = snap.docs[0].ref;
-      await updateDoc(docRef, { confirmed: true });
-      status.textContent = "✅ Subscription confirmed!";
-    }
-
-    run().catch(e => {
-      document.getElementById("status").textContent = "Error: " + e;
-      console.error(e);
-    });
+    })();
   </script>
 </body>
-
 </html>

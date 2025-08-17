@@ -1,3 +1,10 @@
+// Polyfill fetch/Request/Response for Node environments where they may be missing,
+// and to satisfy @sendgrid/client (axios) detection.
+const nf = require('node-fetch'); // ensure node-fetch@2 is installed
+global.fetch = nf;
+global.Request = nf.Request;
+global.Response = nf.Response;
+
 const sgMail = require("@sendgrid/mail");
 const crypto = require("crypto");
 
@@ -15,7 +22,7 @@ if (!PROJECT_ID || !SA_JSON || !SG_KEY || !WEATHER_KEY) {
 
 sgMail.setApiKey(SG_KEY);
 
-// Minimal helpers using Node18 global fetch
+// Helpers using fetch (polyfilled above via node-fetch for Node runners / GitHub Actions)
 async function getAccessTokenFromSA(saJson, scope) {
   const sa = JSON.parse(saJson);
   const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));

@@ -19,7 +19,7 @@ jobs:
       - name: Install deps for script
         run: |
           npm init -y >/dev/null 2>&1
-          npm i @sendgrid/mail uuid >/dev/null 2>&1
+          npm i firebase-admin @sendgrid/mail node-fetch@2 >/dev/null 2>&1
 
       - name: Run daily weather sender
         env:

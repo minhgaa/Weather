@@ -21,9 +21,7 @@ import 'package:weather_app/feature/subscribe/presentation/widget/subscribe_pane
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   final http = HttpClient();
   final locDs = LocationRemoteDS(http);
@@ -89,7 +87,10 @@ class _MyHomePageState extends State<MyHomePage> {
                 context: context,
                 builder: (context) {
                   return AlertDialog(
-                    title: const Text("Subscribe to Daily Forecast"),
+                    title: const Text(
+                      "Subscribe to Daily Forecast",
+                      style: TextStyle(color: AppTheme.primarySeed),
+                    ),
                     content: const SubscriptionPanel(),
                     actions: [
                       TextButton(
