@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Confirm subscription</title>
+</head>
+<body>
+  <h2 id="status">Confirming...</h2>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFirestore, collection, query, where, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "YOUR_WEB_API_KEY",
+      authDomain: "weatherapp-0101.firebaseapp.com",
+      projectId: "weatherapp-0101",
+      // (thêm các trường khác nếu có)
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    function getParam(name) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(name);
+    }
+
+    async function run() {
+      const token = getParam("token");
+      const status = document.getElementById("status");
+      if (!token) {
+        status.textContent = "Missing token";
+        return;
+      }
+
+      await signInAnonymously(auth);
+
+      const q = query(collection(db, "subscribers"), where("token", "==", token));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        status.textContent = "Invalid token";
+        return;
+      }
+      const docRef = snap.docs[0].ref;
+      await updateDoc(docRef, { confirmed: true });
+      status.textContent = "✅ Subscription confirmed!";
+    }
+
+    run().catch(e => {
+      document.getElementById("status").textContent = "Error: " + e;
+      console.error(e);
+    });
+  </script>
+</body>
+</html>
