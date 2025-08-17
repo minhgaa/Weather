@@ -1,0 +1,33 @@
+name: Daily Weather Emails
+on:
+  schedule:
+    - cron: "0 0 * * *"  
+  workflow_dispatch:
+
+jobs:
+  send-forecast:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (optional if you don't need repo files)
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install deps for script
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm i @sendgrid/mail uuid >/dev/null 2>&1
+
+      - name: Run daily weather sender
+        env:
+          FIREBASE_PROJECT_ID: weatherapp-0101
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
+          SENDER_EMAIL: no-reply@yourdomain.com
+          SENDER_NAME: Weather Daily
+        run: |
+          node scripts/send-weather.js
