@@ -1,0 +1,126 @@
+name: daily-email-debug
+on:
+  workflow_dispatch:
+    inputs:
+      city:
+        description: "City to test"
+        required: false
+        default: "Hanoi"
+
+jobs:
+  send:
+    runs-on: ubuntu-latest   # hoặc  nếu bạn dùng hosted runner
+    steps:
+      - name: Show runner info
+        run: |
+          uname -a || true
+          node -v || true
+          npm -v || true
+          nslookup api.weatherapi.com || true
+          curl -I https://api.weatherapi.com || true
+
+      - name: Setup Node 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install deps
+        run: |
+          npm init -y
+          npm i @sendgrid/mail node-fetch@2
+
+      - name: Check secrets presence (masked)
+        run: |
+          test -n "${{ secrets.SENDGRID_KEY }}" && echo "SENDGRID_KEY=SET" || (echo "SENDGRID_KEY=MISSING" && exit 1)
+          test -n "${{ secrets.WEATHER_API_KEY }}" && echo "WEATHER_API_KEY=SET" || (echo "WEATHER_API_KEY=MISSING" && exit 1)
+          test -n "${{ secrets.TO_EMAIL }}" && echo "TO_EMAIL=SET" || (echo "TO_EMAIL=MISSING" && exit 1)
+          test -n "${{ secrets.FROM_EMAIL }}" && echo "FROM_EMAIL=SET" || (echo "FROM_EMAIL=MISSING" && exit 1)
+
+      - name: Run send test
+        env:
+          SENDGRID_KEY: ${{ secrets.SENDGRID_KEY }}
+          WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+          CITY: ${{ github.event.inputs.city }}
+        run: |
+          node - <<'NODE'
+          const sgMail = require("@sendgrid/mail");
+          const fetch = require("node-fetch");
+
+          const SENDGRID_KEY   = process.env.SENDGRID_KEY;
+          const WEATHER_API_KEY= process.env.WEATHER_API_KEY;
+          const TO_EMAIL       = process.env.TO_EMAIL;
+          const FROM_EMAIL     = process.env.FROM_EMAIL;
+          const CITY           = process.env.CITY || "Hanoi";
+
+          function fail(msg){ console.error("❌ " + msg); process.exit(1); }
+
+          if(!SENDGRID_KEY) fail("Missing SENDGRID_KEY secret");
+          if(!WEATHER_API_KEY) fail("Missing WEATHER_API_KEY secret");
+          if(!TO_EMAIL) fail("Missing TO_EMAIL secret");
+          if(!FROM_EMAIL) fail("Missing FROM_EMAIL secret");
+
+          console.log("🔧 Inputs OK:", { CITY, TO_EMAIL, FROM_EMAIL });
+
+          async function getForecast(city){
+            const url = new URL("https://api.weatherapi.com/v1/forecast.json");
+            url.searchParams.set("key", WEATHER_API_KEY);
+            url.searchParams.set("q", city);
+            url.searchParams.set("days", "1");
+            url.searchParams.set("aqi", "no");
+            url.searchParams.set("alerts", "no");
+
+            console.log("🌐 Fetch:", url.toString().replace(WEATHER_API_KEY, "****"));
+            const r = await fetch(url, { timeout: 20000 }).catch(e => {
+              fail("Network error to WeatherAPI: " + e.message);
+            });
+            console.log("HTTP", r.status);
+            const text = await r.text();
+            if(!r.ok){
+              console.error("WeatherAPI error body:", text.slice(0,500));
+              fail(`WeatherAPI ${r.status}`);
+            }
+            try { return JSON.parse(text); }
+            catch(e){ fail("JSON parse failed: " + e.message + " | body: " + text.slice(0,500)); }
+          }
+
+          function renderHtml(city, data){
+            const day = data.forecast?.forecastday?.[0]?.day || {};
+            const cond = day.condition || {};
+            const icon = cond.icon && cond.icon.startsWith("//") ? `https:${cond.icon}` : (cond.icon || "");
+            return `
+              <div style="font-family:Arial,sans-serif;color:#333;line-height:1.6">
+                <h2 style="color:#5971E8;margin:0 0 12px">🌤 Daily Weather — ${city}</h2>
+                ${icon ? `<img src="${icon}" alt="" />` : ""}
+                <p><b>${cond.text || ""}</b></p>
+                <p>Temp: ${day.mintemp_c ?? "?"}–${day.maxtemp_c ?? "?"}°C • Humidity: ${day.avghumidity ?? "?"}% • Wind: ${day.maxwind_kph ?? "?"} km/h</p>
+              </div>`;
+          }
+
+          (async () => {
+            const data = await getForecast(CITY);
+            console.log("✅ WeatherAPI OK. Current condition:", data?.current?.condition?.text);
+
+            sgMail.setApiKey(SENDGRID_KEY);
+
+            const msg = {
+              to: TO_EMAIL,
+              from: { email: FROM_EMAIL, name: "Weather Daily (CI Test)" },
+              subject: `Test Daily Forecast — ${CITY}`,
+              html: renderHtml(CITY, data),
+            };
+
+            console.log("📧 Sending via SendGrid...");
+            try {
+              await sgMail.send(msg);
+              console.log("✅ Email sent to:", TO_EMAIL);
+            } catch (e) {
+              // In lỗi chi tiết từ SendGrid
+              const body = e?.response?.body;
+              console.error("SendGrid error:", e.message);
+              if (body) console.error("SendGrid response body:", JSON.stringify(body, null, 2));
+              process.exit(1);
+            }
+          })();
+          NODE
